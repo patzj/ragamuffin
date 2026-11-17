@@ -151,6 +151,8 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -221,3 +223,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local Ragamuffin state and generated files
+data/
+backups/
+.DS_Store

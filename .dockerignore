@@ -1,0 +1,14 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+__pycache__
+*.py[codz]
+.pytest_cache
+.ruff_cache
+data
+backups
+tests
+examples/documents
+.DS_Store

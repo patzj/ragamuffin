@@ -1,0 +1,42 @@
+services:
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      DATABASE_URL: postgresql://rag:${POSTGRES_PASSWORD}@postgres:5432/rag
+      OLLAMA_BASE_URL: http://ollama:11434
+      EMBEDDING_MODEL: all-minilm
+      DOCUMENTS_DIR: /documents
+    volumes:
+      - ${DOCUMENTS_PATH:-./examples/documents}:/documents:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    mem_limit: 512m
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Required}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_KEEP_ALIVE: "0"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_NO_CLOUD: "1"
+    volumes:
+      - ./data/ollama:/root/.ollama
+    mem_limit: 2g
