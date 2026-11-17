@@ -6,7 +6,7 @@
 
 A lightweight, fully local RAG service for Markdown documents, built with FastAPI, PostgreSQL/pgvector, and Ollama.
 
-The infrastructure, health endpoint, and local embedding client are ready. Document indexing and retrieval are still in development.
+Markdown ingestion, local embeddings, and the health endpoint are ready. Semantic retrieval is still in development.
 
 ## Development
 
@@ -104,3 +104,67 @@ docker compose --profile test run --rm --no-deps test \
 An existing host development environment can also run the isolated checks with
 `uv run --frozen --no-sync pytest -m "not integration" -v`. Keep real embedding
 verification inside Compose; Ollama has no published host port.
+
+## Markdown ingestion
+
+Indexing is explicit; starting the API never scans documents. After rebuilding
+`api`, inspect extraction without accessing PostgreSQL or Ollama:
+
+```bash
+docker compose exec api .venv/bin/python -m app.ingestion.sync --path /documents --inspect
+```
+
+Then index the same read-only mount:
+
+```bash
+docker compose exec api .venv/bin/python -m app.ingestion.sync --path /documents
+```
+
+`--path` defaults to `DOCUMENTS_DIR` (`/documents`). Inspection prints one JSON
+object per chunk to stdout. Progress totals and concise per-file errors go to
+stderr; any failure returns exit status 1 while other files continue. Indexing
+requires `DATABASE_URL` and the configured local embedding model. No models are
+downloaded by ingestion. Substitute `docker-compose` on standalone installations.
+
+The loader accepts UTF-8 `.md` files recursively, skips symlinks, preserves text
+formatting, and records ATX/Setext heading ancestry. Optional YAML frontmatter must
+be a mapping. Dates become ISO strings; user fields remain nested under
+`frontmatter`, separate from generated citation fields. The synthetic examples
+illustrate `source`, `valid_from`, and `expires_on`. Expired evidence is retained
+with its dates; ingestion does not certify validity or filter expired passages.
+
+One database index represents one logical document root. Paths are relative to
+that root, so changing the host/container mount location preserves IDs. Chunks
+are bounded to 600 characters with up to 80 characters of overlap within a
+section. IDs and chunk order are deterministic. Model and chunking configuration
+are recorded and incompatible runs fail. Each file commits atomically after
+embedding, and unchanged files are skipped. Changed indexed files are rejected;
+replacement, rename handling, and deletion detection belong to Phase 5. Do not
+reuse this index for an unrelated root or delete runtime data to resolve errors.
+
+The storage tables are `ragamuffin_index`, `ragamuffin_documents`, and
+`ragamuffin_chunks`; chunks contain text, pgvector embeddings, and JSONB citation
+metadata. Embedding requests use batches of at most 16 chunks and the existing
+`keep_alive=0` client. A file's extracted chunks and vectors remain in memory
+until its transaction; unusually large files may exceed the API memory limit.
+
+For validation, build the test image, start the separate PostgreSQL service, then
+run the tests. Its database uses temporary storage and never mounts `data/`:
+
+```bash
+docker compose --profile test build test
+docker compose --profile test up -d postgres-test ollama
+docker compose --profile test run --rm --no-deps test
+docker compose --profile test run --rm --no-deps test \
+  .venv/bin/python -m pytest -m integration -v
+docker compose --profile test run --rm --no-deps test \
+  .venv/bin/ruff check app/ingestion tests/test_ingestion.py tests/test_ingestion_integration.py
+docker compose --profile test run --rm --no-deps test \
+  .venv/bin/ruff format --check app/ingestion tests/test_ingestion.py tests/test_ingestion_integration.py
+```
+
+Wait for the test database health check before integration tests. They require
+`TEST_DATABASE_URL` pointing at a disposable database and an existing Ollama model;
+unavailable services fail explicitly. Integration runs create isolated schemas
+in that test database. Keep other embedding requests idle to verify unloading.
+Use `docker compose stats` during integration tests to observe memory.

@@ -26,9 +26,27 @@ services:
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_MODEL: all-minilm
+      TEST_DATABASE_URL: postgresql://rag:test-only@postgres-test:5432/rag_test
+    volumes:
+      - ./examples/documents:/fixtures:ro
     depends_on:
       ollama:
         condition: service_started
+    mem_limit: 512m
+  postgres-test:
+    profiles: [test]
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: rag_test
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: test-only
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
     mem_limit: 512m
   postgres:
     image: pgvector/pgvector:pg17
