@@ -80,3 +80,19 @@ def test_unexpected_sync_failure_is_sanitized(monkeypatch, caplog):
     assert '"failure": "unexpected_error"' in caplog.text
     assert "private" not in caplog.text
     assert "credentials.md" not in caplog.text
+
+
+def test_search_returns_no_evidence_for_low_scoring_candidates(monkeypatch):
+    from app.retrieval import search
+
+    monkeypatch.setenv("MIN_SIMILARITY", "0.5")
+    monkeypatch.setattr(
+        search, "rank_candidates", lambda *args, **kwargs: [{"score": 0.49}]
+    )
+    response = TestClient(app).post("/v1/search", json={"query": "unsupported"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "query": "unsupported",
+        "status": "no_evidence",
+        "results": [],
+    }

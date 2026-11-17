@@ -72,14 +72,16 @@ def test_search_and_incremental_lifecycle(index, tmp_path, capsys):
     (tmp_path / "renamed.md").write_text("# Replacement\nNew synthetic evidence")
     assert sync.main(["--path", str(tmp_path)]) == 0
     assert json.loads(capsys.readouterr().err.splitlines()[-1])["deleted"] == 1
-    sources = {r["source"] for r in search.search("evidence", 100)}
+    sources = {r["source"] for r in search.rank_candidates("evidence", 100)}
     assert "access.md" not in sources and "renamed.md" in sources
 
     # Modified-to-empty, deletion, and idempotent reruns.
     (tmp_path / "renamed.md").write_text("")
     (tmp_path / "architecture.md").unlink()
     assert sync.main(["--path", str(tmp_path)]) == 0
-    assert {r["source"] for r in search.search("evidence", 100)} == {"certification.md"}
+    assert {r["source"] for r in search.rank_candidates("evidence", 100)} == {
+        "certification.md"
+    }
     for path in tmp_path.glob("*.md"):
         path.unlink()
     assert sync.main(["--path", str(tmp_path)]) == 0

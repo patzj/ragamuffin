@@ -6,7 +6,15 @@
   {"query": "Who handles employee password resets?", "expected": [["operations.md", ["Password resets"]]]},
   {"query": "How do we dispose of retired laptops?", "expected": [["operations.md", ["Laptop disposal"]]]},
   {"query": "How can I export data?", "case": "ambiguous", "expected": [["policy-a.md", ["Customer exports"]], ["policy-b.md", ["Admin exports"]]]},
-  {"query": "How long must audit logs be retained?", "case": "contradictory", "expected": [["policy-a.md", ["Audit log retention"]], ["policy-b.md", ["Audit log retention"]]]},
-  {"query": "When did the Acorn assurance certificate expire?", "case": "expired", "expected": [["certificate.md", ["Assurance certificate"]]], "frontmatter": {"source": "https://example.invalid/assurance.pdf", "expires_on": "2020-12-31"}},
-  {"query": "What is the reimbursement rate for international rail travel?", "case": "missing", "expected": []}
+  {"query": "How long must audit logs be retained?", "case": "contradictory", "expected": [["policy-a.md", ["Audit log retention"]], ["policy-b.md", ["Audit log retention"]]], "passages": [["policy-a.md", ["Audit log retention"], "90 days"], ["policy-b.md", ["Audit log retention"], "180 days"]]},
+  {"query": "When did the Acorn assurance certificate expire?", "case": "expired", "expected": [["certificate.md", ["Assurance certificate"]]], "frontmatter": {"source": "https://example.invalid/assurance.pdf", "expires_on": "2020-12-31"}, "passages": [["certificate.md", ["Assurance certificate"], "December 2020"]]},
+  {"query": "What is the reimbursement rate for international rail travel?", "case": "missing", "expected": []},
+  {"query": "What is the required audit log retention period for offline badge readers?", "case": "near_match", "expected": []},
+  {"query": "Does the Acorn service have a currently valid assurance certificate?", "case": "review", "expected": [["certificate.md", ["Assurance certificate"]]], "frontmatter": {"expires_on": "2020-12-31"}},
+  {"query": "Does the Acorn certificate cover the separate billing service?", "case": "review", "expected": [["certificate.md", ["Assurance certificate"]]], "passages": [["certificate.md", ["Assurance certificate"], "covered the synthetic service"]]},
+  {"query": "Are staff accounts required to use MFA?", "split": "calibration", "expected": [["operations.md", ["Account access"]]]},
+  {"query": "How long do the two policies say to keep audit logs?", "split": "calibration", "case": "contradictory", "expected": [["policy-a.md", ["Audit log retention"]], ["policy-b.md", ["Audit log retention"]]]},
+  {"query": "How often are full database backups performed?", "split": "calibration", "expected": [["operations.md", ["Database backups"]]]},
+  {"query": "Who approves employee reimbursement for international travel?", "split": "calibration", "case": "missing", "expected": []},
+  {"query": "How often are production backup encryption keys rotated?", "split": "calibration", "case": "near_match", "expected": []}
 ]

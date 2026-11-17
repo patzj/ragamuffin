@@ -9,6 +9,7 @@ services:
       DATABASE_URL: postgresql://rag:${POSTGRES_PASSWORD}@postgres:5432/rag
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_MODEL: all-minilm
+      MIN_SIMILARITY: ${MIN_SIMILARITY:-}
       DOCUMENTS_DIR: /documents
     volumes:
       - ${DOCUMENTS_PATH:-./examples/documents}:/documents:ro
@@ -31,6 +32,7 @@ services:
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_MODEL: all-minilm
+      MIN_SIMILARITY: ${MIN_SIMILARITY:-}
       TEST_DATABASE_URL: postgresql://rag:test-only@postgres-test:5432/rag_test
     volumes:
       - ./examples/documents:/fixtures:ro

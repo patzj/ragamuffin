@@ -35,7 +35,7 @@ docker compose exec api .venv/bin/python -m app.retrieval.search \
   'What is the access control policy?' --top-k 5
 ```
 
-Search returns JSON passages and citations. It generates no answers and applies no relevance or expiry cutoff.
+Search returns passages and citations. Set `MIN_SIMILARITY` in `.env` to override the provisional cosine cutoff of 0.30. HTTP returns `no_evidence` when no passage qualifies. Review each citation for relevance, scope, and validity before using it in a questionnaire.
 
 Sync skips unchanged files, replaces modified files atomically, and removes missing files after a successful run. Failed updates retain previous evidence and prevent deletion cleanup. Use one document root per index; syncing an empty directory clears its indexed content.
 
@@ -85,7 +85,7 @@ docker compose --profile test run --rm --no-deps test \
   .venv/bin/python -m app.evaluation.run --dataset /app/tests/fixtures/evaluation.json
 ```
 
-Save the JSON output and pass its path with `--baseline` to compare later runs on the same hardware, model, and corpus.
+Add `--calibrate` to select a cutoff on the calibration split. If it passes, set `MIN_SIMILARITY` to the reported value and rerun without `--calibrate`. Use `--baseline` to compare runs with the same hardware, model, cutoff, and corpus.
 
 For standalone Compose installations, use `docker-compose` in place of `docker compose`.
 

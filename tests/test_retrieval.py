@@ -35,3 +35,14 @@ def test_cli(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert not captured.out
     assert "RuntimeError" in captured.err and "secret" not in captured.err
+
+
+def test_similarity_cutoff_is_inclusive(monkeypatch, capsys):
+    hits = [{"score": 0.8}, {"score": 0.5}, {"score": 0.49}]
+    monkeypatch.setattr(search, "rank_candidates", lambda *args, **kwargs: hits)
+    monkeypatch.setenv("MIN_SIMILARITY", "0.5")
+    assert search.search("question") == hits[:2]
+    assert search.main(["question"]) == 0
+    assert json.loads(capsys.readouterr().out)["results"] == hits[:2]
+    monkeypatch.setenv("MIN_SIMILARITY", "0.9")
+    assert search.search("question") == []

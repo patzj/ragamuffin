@@ -6,13 +6,31 @@ import math
 import sys
 
 import psycopg
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 from app.embeddings import create_embeddings
 from app.ingestion.markdown import CHUNKING_VERSION
 from app.ingestion.sync import IngestionSettings, report_error
 
 
+class SearchSettings(BaseSettings, env_ignore_empty=True):
+    # Provisional until the release calibration is run with real Ollama.
+    min_similarity: float = Field(default=0.30, ge=-1, le=1)
+
+
 def search(
+    query: str, top_k: int = 5, *, database_url: str | None = None
+) -> list[dict]:
+    cutoff = SearchSettings().min_similarity
+    return [
+        hit
+        for hit in rank_candidates(query, top_k, database_url=database_url)
+        if hit["score"] >= cutoff
+    ]
+
+
+def rank_candidates(
     query: str, top_k: int = 5, *, database_url: str | None = None
 ) -> list[dict]:
     if not query.strip():
