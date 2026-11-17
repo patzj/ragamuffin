@@ -27,31 +27,24 @@ def report_error(source: str, error: Exception):
     print(json.dumps({"source": source, "error": message}), file=sys.stderr)
 
 
-def main(argv=None) -> int:
-    settings = IngestionSettings()
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--path", type=Path, default=Path(settings.documents_dir))
-    parser.add_argument(
-        "--inspect", action="store_true", help="Print chunks without network requests"
-    )
-    args = parser.parse_args(argv)
+def run_sync(path, *, database_url, inspect=False, on_chunk=None):
+    errors = []
     counts = {"indexed": 0, "skipped": 0, "failed": 0, "inspected": 0, "deleted": 0}
     store = None
     try:
         embeddings = None
-        if not args.inspect:
-            if not settings.database_url:
+        if not inspect:
+            if not database_url:
                 raise ValueError("DATABASE_URL is required")
             embeddings = create_embeddings()
-            store = IngestionStore(settings.database_url, embeddings.model)
-            store.acquire_sync_lock()
-        paths = discover(args.path)
-        for path in paths:
+            store = IngestionStore(database_url, embeddings.model, lock_for_sync=True)
+        paths = discover(path)
+        for file in paths:
             try:
-                document = extract(path, args.path)
-                if args.inspect:
+                document = extract(file, path)
+                if inspect:
                     for chunk in document.chunks:
-                        print(json.dumps(chunk, ensure_ascii=False))
+                        on_chunk(chunk)
                     counts["inspected"] += 1
                 elif store.unchanged(document):
                     counts["skipped"] += 1
@@ -72,17 +65,36 @@ def main(argv=None) -> int:
                     ] += 1
             except Exception as error:  # noqa: BLE001 - report a file failure and continue
                 counts["failed"] += 1
-                report_error(path.relative_to(args.path).as_posix(), error)
+                errors.append((file.relative_to(path).as_posix(), error))
         if store and not counts["failed"]:
             counts["deleted"] = store.remove_missing(
-                [path.relative_to(args.path).as_posix() for path in paths]
+                [file.relative_to(path).as_posix() for file in paths]
             )
     except Exception as error:  # noqa: BLE001 - report a file failure and continue
         counts["failed"] += 1
-        report_error(str(args.path), error)
+        errors.append((str(path), error))
     finally:
         if store:
             store.close()
+    return counts, errors
+
+
+def main(argv=None) -> int:
+    settings = IngestionSettings()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--path", type=Path, default=Path(settings.documents_dir))
+    parser.add_argument(
+        "--inspect", action="store_true", help="Print chunks without network requests"
+    )
+    args = parser.parse_args(argv)
+    counts, errors = run_sync(
+        args.path,
+        database_url=settings.database_url,
+        inspect=args.inspect,
+        on_chunk=lambda chunk: print(json.dumps(chunk, ensure_ascii=False)),
+    )
+    for source, error in errors:
+        report_error(source, error)
     print(json.dumps(counts), file=sys.stderr)
     return int(counts["failed"] > 0)
 

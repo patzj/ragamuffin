@@ -1,0 +1,12 @@
+[
+  {"query": "Do employee accounts need multifactor authentication?", "expected": [["operations.md", ["Account access"]]]},
+  {"query": "How often are database backups taken?", "expected": [["operations.md", ["Database backups"]]]},
+  {"query": "When should I report a suspected security incident?", "expected": [["operations.md", ["Incident reporting"]]]},
+  {"query": "Where do visitors get a temporary badge?", "expected": [["operations.md", ["Visitor badges"]]]},
+  {"query": "Who handles employee password resets?", "expected": [["operations.md", ["Password resets"]]]},
+  {"query": "How do we dispose of retired laptops?", "expected": [["operations.md", ["Laptop disposal"]]]},
+  {"query": "How can I export data?", "case": "ambiguous", "expected": [["policy-a.md", ["Customer exports"]], ["policy-b.md", ["Admin exports"]]]},
+  {"query": "How long must audit logs be retained?", "case": "contradictory", "expected": [["policy-a.md", ["Audit log retention"]], ["policy-b.md", ["Audit log retention"]]]},
+  {"query": "When did the Acorn assurance certificate expire?", "case": "expired", "expected": [["certificate.md", ["Assurance certificate"]]], "frontmatter": {"source": "https://example.invalid/assurance.pdf", "expires_on": "2020-12-31"}},
+  {"query": "What is the reimbursement rate for international rail travel?", "case": "missing", "expected": []}
+]

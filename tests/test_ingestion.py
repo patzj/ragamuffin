@@ -139,11 +139,8 @@ def test_cli_index_failures_and_repeat(tmp_path, monkeypatch, capsys):
             return [[1.0, 2.0] for _ in texts]
 
     class Store:
-        def __init__(self, *args):
-            pass
-
-        def acquire_sync_lock(self):
-            pass
+        def __init__(self, *args, lock_for_sync):
+            assert lock_for_sync
 
         def unchanged(self, doc):
             return doc.document_id in stored

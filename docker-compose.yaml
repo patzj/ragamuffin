@@ -17,6 +17,11 @@ services:
         condition: service_healthy
       ollama:
         condition: service_started
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/readyz', timeout=5).close()"]
+      interval: 15s
+      timeout: 6s
+      retries: 3
     mem_limit: 512m
   test:
     profiles: [test]
@@ -35,7 +40,7 @@ services:
     mem_limit: 512m
   postgres-test:
     profiles: [test]
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
     environment:
       POSTGRES_DB: rag_test
       POSTGRES_USER: rag
@@ -49,7 +54,7 @@ services:
       retries: 15
     mem_limit: 512m
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
     environment:
       POSTGRES_DB: rag
       POSTGRES_USER: rag
@@ -63,7 +68,7 @@ services:
       retries: 10
     mem_limit: 512m
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:latest@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592
     environment:
       OLLAMA_KEEP_ALIVE: "0"
       OLLAMA_MAX_LOADED_MODELS: "1"

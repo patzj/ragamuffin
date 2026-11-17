@@ -203,3 +203,48 @@ def test_ranking_validation_and_failed_sync(index, tmp_path, monkeypatch):
     embeddings.model = "wrong-model"
     with pytest.raises(ValueError, match="Incompatible"):
         search.search("evidence")
+
+
+def test_http_lifecycle(index, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    store, _url = index
+    client = TestClient(app)
+    monkeypatch.setenv("DOCUMENTS_DIR", str(tmp_path))
+    with store.connection.transaction():
+        store.connection.execute("DROP TABLE ragamuffin_chunks")
+        store.connection.execute("DROP TABLE ragamuffin_documents")
+        store.connection.execute("DROP TABLE ragamuffin_index")
+    assert client.get("/readyz").json() == {"status": "ready"}
+    assert client.get("/v1/stats").json()["initialized"] is False
+    query = {"query": "Who may access the service?"}
+    assert client.post("/v1/search", json=query).status_code == 503
+    assert client.post("/v1/index/sync").status_code == 200
+    assert client.post("/v1/search", json=query).json()["status"] == "no_evidence"
+
+    path = tmp_path / "access.md"
+    path.write_text(
+        "# Access policy\nOnly approved employees may access the service.\n"
+    )
+    assert client.post("/v1/index/sync").json()["indexed"] == 1
+    stats = client.get("/v1/stats").json()
+    assert stats["documents"] == stats["chunks"] == 1
+    evidence = client.post("/v1/search", json=query).json()["results"][0]
+    assert evidence["source"] == "access.md"
+    assert evidence["headings"] == ["Access policy"]
+
+    store.acquire_sync_lock()
+    assert client.post("/v1/index/sync").status_code == 409
+    store.connection.execute("SELECT pg_advisory_unlock_all()")
+    path.rename(tmp_path / "invalid.md")
+    (tmp_path / "invalid.md").write_text("---\n")
+    response = client.post("/v1/index/sync")
+    assert response.status_code == 500
+    assert response.json()["failed"] == 1
+    assert client.get("/v1/stats").json()["documents"] == 1
+
+    monkeypatch.setenv("EMBEDDING_MODEL", "missing-model")
+    assert client.get("/readyz").json() == {"detail": "Embedding model unavailable"}
+    assert client.post("/v1/search", json=query).status_code == 503

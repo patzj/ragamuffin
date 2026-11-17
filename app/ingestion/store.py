@@ -8,11 +8,17 @@ from psycopg.types.json import Jsonb
 from app.ingestion.markdown import CHUNKING_VERSION, ExtractedDocument
 
 
+class SyncInProgress(ValueError):
+    pass
+
+
 class IngestionStore:
-    def __init__(self, database_url: str, model: str):
+    def __init__(self, database_url: str, model: str, *, lock_for_sync: bool = False):
         self.connection = psycopg.connect(database_url, autocommit=True)
         self.model = model
         try:
+            if lock_for_sync:
+                self.acquire_sync_lock()
             with self.connection.transaction():
                 self.connection.execute("CREATE EXTENSION IF NOT EXISTS vector")
                 self.connection.execute("""
@@ -50,7 +56,7 @@ class IngestionStore:
             "SELECT pg_try_advisory_lock(hashtext(current_schema()), hashtext('ragamuffin_sync'))"
         ).fetchone()[0]
         if not locked:
-            raise ValueError("Sync already running")
+            raise SyncInProgress("Sync already running")
 
     def remove_missing(self, sources: list[str]) -> int:
         with self.connection.transaction():

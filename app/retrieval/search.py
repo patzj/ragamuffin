@@ -12,16 +12,19 @@ from app.ingestion.markdown import CHUNKING_VERSION
 from app.ingestion.sync import IngestionSettings, report_error
 
 
-def search(query: str, top_k: int = 5) -> list[dict]:
+def search(
+    query: str, top_k: int = 5, *, database_url: str | None = None
+) -> list[dict]:
     if not query.strip():
         raise ValueError("Query is required")
     if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
         raise ValueError("top_k must be a positive integer")
-    settings = IngestionSettings()
-    if not settings.database_url:
+    if database_url is None:
+        database_url = IngestionSettings().database_url
+    if not database_url:
         raise ValueError("DATABASE_URL is required")
     embeddings = create_embeddings()
-    with psycopg.connect(settings.database_url) as connection:
+    with psycopg.connect(database_url) as connection:
         # One snapshot keeps configuration and passages consistent across a sync.
         connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         if (
