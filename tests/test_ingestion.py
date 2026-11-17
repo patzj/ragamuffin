@@ -121,6 +121,7 @@ def test_cli_inspection_and_failure(tmp_path, capsys):
         "skipped": 0,
         "failed": 1,
         "inspected": 1,
+        "deleted": 0,
     }
 
 
@@ -139,6 +140,9 @@ def test_cli_index_failures_and_repeat(tmp_path, monkeypatch, capsys):
 
     class Store:
         def __init__(self, *args):
+            pass
+
+        def acquire_sync_lock(self):
             pass
 
         def unchanged(self, doc):
@@ -188,3 +192,13 @@ def test_synthetic_examples():
         chunk["metadata"]["frontmatter"]["expires_on"] == "2026-01-01"
         for chunk in certification.chunks
     )
+
+
+def test_discovery_reports_traversal_failure(tmp_path, monkeypatch):
+    def walk(root, followlinks, onerror):
+        onerror(PermissionError("Unreadable directory"))
+        yield  # Keep the mock a generator like os.walk.
+
+    monkeypatch.setattr("app.ingestion.markdown.os.walk", walk)
+    with pytest.raises(PermissionError):
+        discover(tmp_path)

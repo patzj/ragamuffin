@@ -35,16 +35,17 @@ def main(argv=None) -> int:
         "--inspect", action="store_true", help="Print chunks without network requests"
     )
     args = parser.parse_args(argv)
-    counts = {"indexed": 0, "skipped": 0, "failed": 0, "inspected": 0}
+    counts = {"indexed": 0, "skipped": 0, "failed": 0, "inspected": 0, "deleted": 0}
     store = None
     try:
-        paths = discover(args.path)
         embeddings = None
         if not args.inspect:
             if not settings.database_url:
                 raise ValueError("DATABASE_URL is required")
             embeddings = create_embeddings()
             store = IngestionStore(settings.database_url, embeddings.model)
+            store.acquire_sync_lock()
+        paths = discover(args.path)
         for path in paths:
             try:
                 document = extract(path, args.path)
@@ -72,6 +73,10 @@ def main(argv=None) -> int:
             except Exception as error:  # noqa: BLE001 - report a file failure and continue
                 counts["failed"] += 1
                 report_error(path.relative_to(args.path).as_posix(), error)
+        if store and not counts["failed"]:
+            counts["deleted"] = store.remove_missing(
+                [path.relative_to(args.path).as_posix() for path in paths]
+            )
     except Exception as error:  # noqa: BLE001 - report a file failure and continue
         counts["failed"] += 1
         report_error(str(args.path), error)

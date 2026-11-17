@@ -2,7 +2,9 @@
 
 import hashlib
 import json
+import os
 import re
+import stat
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -40,16 +42,19 @@ class ExtractedDocument:
 def discover(root: Path) -> list[Path]:
     if not root.is_dir() or root.is_symlink():
         raise ValueError("Document root must be a directory, not a symlink")
-    return sorted(
-        path
-        for path in root.rglob("*")
-        if path.suffix.lower() == ".md"
-        and path.is_file()
-        and not any(
-            (root / Path(*path.relative_to(root).parts[:i])).is_symlink()
-            for i in range(1, len(path.relative_to(root).parts) + 1)
-        )
-    )
+
+    def fail(error):
+        raise error
+
+    paths = []
+    # os.walk's default silently ignores unreadable directories, unsafe for pruning.
+    for directory, dirs, files in os.walk(root, followlinks=False, onerror=fail):
+        dirs[:] = [name for name in dirs if not (Path(directory) / name).is_symlink()]
+        for name in files:
+            path = Path(directory) / name
+            if path.suffix.lower() == ".md" and stat.S_ISREG(path.lstat().st_mode):
+                paths.append(path)
+    return sorted(paths)
 
 
 def sections(body: str):

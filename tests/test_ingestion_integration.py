@@ -56,8 +56,7 @@ def test_pgvector_ingestion(tmp_path, monkeypatch, capsys):
             assert metadata["frontmatter"]["source"].endswith("example-2025.pdf")
             assert metadata["frontmatter"]["expires_on"] == "2026-01-01"
         local.write_text("# Changed\nNew text")
-        with pytest.raises(ValueError, match="Changed indexed file"):
-            store.unchanged(extract(local, tmp_path))
+        assert not store.unchanged(extract(local, tmp_path))
         bad = tmp_path / "bad.md"
         bad.write_text("# New\nText")
         rejected = extract(bad, tmp_path)
@@ -90,8 +89,8 @@ def test_pgvector_ingestion(tmp_path, monkeypatch, capsys):
             assert counts["skipped"] == skipped
             assert counts["failed"] == 0
         local.write_text("# Changed\nNew evidence")
-        assert sync.main(["--path", str(tmp_path)]) == 1
-        assert "Changed indexed file" in capsys.readouterr().err
+        assert sync.main(["--path", str(tmp_path)]) == 0
+        assert json.loads(capsys.readouterr().err.splitlines()[-1])["indexed"] == 1
         settings = EmbeddingSettings()
         with httpx.Client(base_url=settings.ollama_base_url) as client:
             assert_model_unloaded(client, settings.embedding_model)

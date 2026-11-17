@@ -45,6 +45,28 @@ class IngestionStore:
             self.connection.close()
             raise
 
+    def acquire_sync_lock(self):
+        locked = self.connection.execute(
+            "SELECT pg_try_advisory_lock(hashtext(current_schema()), hashtext('ragamuffin_sync'))"
+        ).fetchone()[0]
+        if not locked:
+            raise ValueError("Sync already running")
+
+    def remove_missing(self, sources: list[str]) -> int:
+        with self.connection.transaction():
+            self._configuration()
+            self.connection.execute(
+                """DELETE FROM ragamuffin_chunks WHERE document_id IN (
+                    SELECT id FROM ragamuffin_documents WHERE NOT (source = ANY(%s))
+                )""",
+                (sources,),
+            )
+            result = self.connection.execute(
+                "DELETE FROM ragamuffin_documents WHERE NOT (source = ANY(%s))",
+                (sources,),
+            )
+            return result.rowcount
+
     def close(self):
         self.connection.close()
 
@@ -61,9 +83,7 @@ class IngestionStore:
             "SELECT source_digest FROM ragamuffin_documents WHERE id = %s",
             (document.document_id,),
         ).fetchone()
-        if row and row[0] != document.source_digest:
-            raise ValueError("Changed indexed file; replacement requires Phase 5")
-        return row is not None
+        return row is not None and row[0] == document.source_digest
 
     def add(self, document: ExtractedDocument, vectors: list[list[float]]) -> bool:
         if len(vectors) != len(document.chunks):
@@ -91,8 +111,13 @@ class IngestionStore:
                     (dimension,),
                 )
             self.connection.execute(
-                "INSERT INTO ragamuffin_documents VALUES (%s, %s, %s)",
+                """INSERT INTO ragamuffin_documents VALUES (%s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET source_digest = EXCLUDED.source_digest""",
                 (document.document_id, document.source, document.source_digest),
+            )
+            self.connection.execute(
+                "DELETE FROM ragamuffin_chunks WHERE document_id = %s",
+                (document.document_id,),
             )
             with self.connection.cursor() as cursor:
                 cursor.executemany(
