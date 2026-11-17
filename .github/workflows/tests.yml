@@ -1,0 +1,20 @@
+name: Tests
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build test image
+        run: docker build --target test -t ragamuffin-tests .
+      - name: Run unit tests
+        run: docker run --rm ragamuffin-tests
