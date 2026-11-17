@@ -1,4 +1,5 @@
 import importlib
+import json
 import math
 import socket
 import time
@@ -6,7 +7,7 @@ import time
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from langchain_ollama import OllamaEmbeddings
+from ollama import Client
 
 from app.embeddings import EmbeddingSettings, create_embeddings
 
@@ -29,11 +30,8 @@ def isolated_environment(monkeypatch, request):
 def test_create_embeddings_defaults():
     embeddings = create_embeddings()
 
-    assert isinstance(embeddings, OllamaEmbeddings)
     assert embeddings.base_url == "http://localhost:11434"
     assert embeddings.model == "all-minilm"
-    assert embeddings.keep_alive == 0
-    assert embeddings.validate_model_on_init is False
 
 
 def test_create_embeddings_environment(monkeypatch):
@@ -44,7 +42,39 @@ def test_create_embeddings_environment(monkeypatch):
 
     assert embeddings.base_url == "http://ollama:11434"
     assert embeddings.model == "sample-model"
-    assert embeddings.keep_alive == 0
+
+
+@pytest.mark.parametrize(
+    ("base_url", "authorization"),
+    [
+        ("http://localhost:11434", None),
+        ("http://rag:local%20secret@localhost:11434", "Basic cmFnOmxvY2FsIHNlY3JldA=="),
+    ],
+)
+def test_embedding_requests(monkeypatch, base_url, authorization):
+    inputs = []
+    monkeypatch.setenv("OLLAMA_BASE_URL", base_url)
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+
+    def respond(request):
+        assert str(request.url) == "http://localhost:11434/api/embed"
+        assert request.headers.get("Authorization") == authorization
+        payload = json.loads(request.content)
+        assert payload["model"] == "all-minilm"
+        assert payload["keep_alive"] == 0
+        inputs.append(payload["input"])
+        return httpx.Response(
+            200, json={"model": "all-minilm", "embeddings": [[1.0]] * len(inputs[-1])}
+        )
+
+    monkeypatch.setattr(
+        "app.embeddings.Client",
+        lambda **kwargs: Client(transport=httpx.MockTransport(respond), **kwargs),
+    )
+    embeddings = create_embeddings()
+    assert embeddings.embed_documents(["one", "two"]) == [[1.0], [1.0]]
+    assert embeddings.embed_query("query") == [1.0]
+    assert inputs == [["one", "two"], ["query"]]
 
 
 def test_health_without_ollama():

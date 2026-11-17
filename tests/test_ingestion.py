@@ -1,3 +1,4 @@
+import hashlib
 import json
 import socket
 from pathlib import Path
@@ -58,6 +59,20 @@ def test_ids_and_bounds(tmp_path):
         extract(write(a, text + "edit", "nested/sample.md"), a).source_digest
         != first.source_digest
     )
+
+
+def test_chunking_matches_existing_index(tmp_path):
+    text = (
+        "---\r\nsource: sample\r\n---\r\n# α\r\n```text\r\n"
+        + "λ " * 400
+        + "\r\n```\r\n"
+    )
+    path = tmp_path / "0.md"
+    path.write_bytes(text.encode())
+    chunks = extract(path, tmp_path).chunks
+    # Persisted citations use IDs derived from the text and the chunk boundaries.
+    digest = hashlib.sha256(json.dumps(chunks, sort_keys=True).encode()).hexdigest()
+    assert digest == "96158456f60e1b9bb8325cdcf101b76709123df7c03fe94e5394266cc267fe2e"
 
 
 def test_frontmatter_provenance(tmp_path):

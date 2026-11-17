@@ -5,14 +5,17 @@ import json
 import os
 import re
 import stat
+from collections import deque
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
 import yaml
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 CHUNKING_VERSION = "markdown-v1:600:80"
+CHUNK_SIZE = 600
+CHUNK_OVERLAP = 80
+CHUNK_SEPARATORS = ("\n\n", "\n", " ", "")
 
 
 def digest(value: str) -> str:
@@ -101,6 +104,44 @@ def sections(body: str):
         yield [name for _, name in headings], "".join(content)
 
 
+def merge_fragments(fragments: list[str]):
+    window: deque[str] = deque()
+    size = 0
+    for fragment in fragments:
+        if size + len(fragment) > CHUNK_SIZE:
+            yield "".join(window)
+            while size > CHUNK_OVERLAP or size + len(fragment) > CHUNK_SIZE:
+                size -= len(window.popleft())
+        window.append(fragment)
+        size += len(fragment)
+    if window:
+        yield "".join(window)
+
+
+def split_passages(text: str, separators: tuple[str, ...] = CHUNK_SEPARATORS):
+    separator = next(item for item in separators if item in text)
+    if not separator:
+        yield from merge_fragments(list(text))
+        return
+
+    # Each separator starts the next fragment so evidence keeps its whitespace.
+    starts = [0, *(match.start() for match in re.finditer(re.escape(separator), text))]
+    fragments = []
+    for start, end in zip(starts, [*starts[1:], len(text)], strict=True):
+        if start == end:
+            continue
+        fragment = text[start:end]
+        if len(fragment) < CHUNK_SIZE:
+            fragments.append(fragment)
+        else:
+            yield from merge_fragments(fragments)
+            fragments.clear()
+            yield from split_passages(
+                fragment, separators[separators.index(separator) + 1 :]
+            )
+    yield from merge_fragments(fragments)
+
+
 def extract(path: Path, root: Path) -> ExtractedDocument:
     relative = path.relative_to(root)
     if any(
@@ -130,11 +171,8 @@ def extract(path: Path, root: Path) -> ExtractedDocument:
     source = relative.as_posix()
     document_id = digest(source)
     chunks = []
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=600, chunk_overlap=80, strip_whitespace=False
-    )
     for section_index, (headings, text) in enumerate(sections(body)):
-        for section_chunk, passage in enumerate(splitter.split_text(text)):
+        for section_chunk, passage in enumerate(split_passages(text)):
             if not passage.strip():
                 continue
             chunk_id = digest(
